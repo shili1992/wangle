@@ -1,0 +1,3 @@
+[submodule "deps/folly"]
+	path = deps/folly
+	url = git@github.com:shili1992/folly.git
