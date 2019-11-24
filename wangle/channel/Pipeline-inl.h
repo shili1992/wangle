@@ -35,12 +35,15 @@ Pipeline<R, W>::~Pipeline() {
   }
 }
 
+// 首先，会根据要添加的handler类型定义一个Context（Context可以看成是Handler的外套,后面还会单独介绍）类型，
+// 然后根据这个Context类型创建一个Context：参数为Pipeline指针和handler，最终addHelper会将Context添加到容器管理起来
 template <class H>
 PipelineBase& PipelineBase::addBack(std::shared_ptr<H> handler) {
-  typedef typename ContextType<H>::type Context;
+  typedef typename ContextType<H>::type Context; // 声明Conetxt类型,ContextImpl<Handler>、InboundContextImpl<Handler>、OutboundContextImpl<Handler>其中之一
+    // 使用Context包装Handler后，将其添加到pipeline中，Context中还持有pipeline的引用
   return addHelper(
       std::make_shared<Context>(shared_from_this(), std::move(handler)),
-      false);
+      false); // false标识添加到尾部
 }
 
 template <class H>
@@ -153,9 +156,10 @@ void PipelineBase::addContextFront(Context* ctx) {
 
 template <class Context>
 PipelineBase& PipelineBase::addHelper(
-    std::shared_ptr<Context>&& ctx,
+    std::shared_ptr<Context>&& ctx, /* Context内部包含了Pipeline、Handler*/
     bool front) {
   ctxs_.insert(front ? ctxs_.begin() : ctxs_.end(), ctx);
+    // 然后根据方向（BOTH、IN、OUT分别加入相应的vector中）
   if (Context::dir == HandlerDir::BOTH || Context::dir == HandlerDir::IN) {
     inCtxs_.insert(front ? inCtxs_.begin() : inCtxs_.end(), ctx.get());
   }

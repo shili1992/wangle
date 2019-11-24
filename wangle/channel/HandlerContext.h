@@ -29,7 +29,7 @@ class HandlerContext {
  public:
   virtual ~HandlerContext() = default;
 
-  virtual void fireRead(In msg) = 0;
+  virtual void fireRead(In msg) = 0;  //从上游
   virtual void fireReadEOF() = 0;
   virtual void fireReadException(folly::exception_wrapper e) = 0;
   virtual void fireTransportActive() = 0;

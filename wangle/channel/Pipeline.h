@@ -33,11 +33,12 @@ namespace wangle {
 class PipelineBase;
 class Acceptor;
 
+//如果你需要监听Pipeline的delete和refresh事件，那么可以自己实现一个PipelineManager并设置到Pipeline上。
 class PipelineManager {
  public:
   virtual ~PipelineManager() = default;
-  virtual void deletePipeline(PipelineBase* pipeline) = 0;
-  virtual void refreshTimeout() {}
+  virtual void deletePipeline(PipelineBase* pipeline) = 0; // deletePipeline会在显示调用一个pipeline的close方法时被调用，一般用来完成该Pipeline相关的资源释放
+  virtual void refreshTimeout() {}  // refreshTimeout主要在Pipeline发生读写事件时被回调，主要用来刷新Pipeline的空闲时间
 };
 
 class PipelineBase : public std::enable_shared_from_this<PipelineBase> {
@@ -62,6 +63,8 @@ class PipelineBase : public std::enable_shared_from_this<PipelineBase> {
     transport_ = transport;
   }
 
+  //Wangle中的Pipeline兼有Channel的功能
+  // getTransport，该方法可以获得一个底层的AsyncTransport，而该AsyncTransport拥有所有的底层连接信息
   std::shared_ptr<folly::AsyncTransport> getTransport() {
     return transport_;
   }
@@ -132,9 +135,9 @@ class PipelineBase : public std::enable_shared_from_this<PipelineBase> {
 
   void detachHandlers();
 
-  std::vector<std::shared_ptr<PipelineContext>> ctxs_;
-  std::vector<PipelineContext*> inCtxs_;
-  std::vector<PipelineContext*> outCtxs_;
+  std::vector<std::shared_ptr<PipelineContext>> ctxs_; //所有的PipelineContext，  该vector种使用的是智能指针，可以保持对Context的引用
+  std::vector<PipelineContext*> inCtxs_;  //inbound 类型的PipelineContext， 这里放的是Context的指针，因为引用在上面的容器中已经保持
+  std::vector<PipelineContext*> outCtxs_; //outbound 类型的PipelineContext
 
  private:
   PipelineManager* manager_{nullptr};
