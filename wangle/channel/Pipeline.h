@@ -169,6 +169,7 @@ class PipelineBase : public std::enable_shared_from_this<PipelineBase> {
  * If R is Unit, read(), readEOF(), and readException() will be disabled.
  * If W is Unit, write() and close() will be disabled.
  */
+// Pipeline主要定义和实现了一些和Handler对应的常用方法：read、readEOF、readException、transportActive、transportInactive、write、writeException、close。
 template <class R, class W = folly::Unit>
 class Pipeline : public PipelineBase {
  public:
@@ -182,25 +183,25 @@ class Pipeline : public PipelineBase {
 
   template <class T = R>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value>::type
-  read(R msg);
+  read(R msg); //front_->read(std::forward<R>(msg)); --> this->handler_->read(this, std::forward<Rin>(msg));
 
   template <class T = R>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value>::type
-  readEOF();
+  readEOF();  //front_->readEOF();
 
   template <class T = R>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value>::type
-  readException(folly::exception_wrapper e);
+  readException(folly::exception_wrapper e);  //front_->readException(std::move(e));
 
   template <class T = R>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value>::type
-  transportActive();
+  transportActive();  // front_->transportActive();
 
   template <class T = R>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value>::type
-  transportInactive();
+  transportInactive();  // front_->transportActive();
 
-  template <class T = W>
+    template <class T = W>
   typename std::enable_if<!std::is_same<T, folly::Unit>::value,
                           folly::Future<folly::Unit>>::type
   write(W msg);

@@ -24,11 +24,15 @@ class PipelineContext {
  public:
   virtual ~PipelineContext() = default;
 
+    // 依附到一个pipeline中
   virtual void attachPipeline() = 0;
+    // 从pipeline中分离
   virtual void detachPipeline() = 0;
 
+    // 将一个HandlerContext绑定到handler上
   template <class H, class HandlerContext>
   void attachContext(H* handler, HandlerContext* ctx) {
+        // 只有第一次绑定的时候才会设置
     if (++handler->attachCount_ == 1) {
       handler->ctx_ = ctx;
     } else {
@@ -43,13 +47,15 @@ class PipelineContext {
     }
     handler->ctx_ = nullptr;
   }
-
+    // 设置下一个inbound类型的Context
     virtual void setNextIn(PipelineContext * ctx) = 0;
+    // 设置下一个outbound类型的Context
     virtual void setNextOut(PipelineContext * ctx) = 0;
-
+    // 获取方向(Context方向依赖于Handler方向)
     virtual HandlerDir getDirection() = 0;
 };
 
+// InboundLink只是把Pipeline主要方法中的IN方向单独抽象出来，都是一个IN事件（输入事件）
 template <class In>
 class InboundLink {
  public:
@@ -61,6 +67,7 @@ class InboundLink {
   virtual void transportInactive() = 0;
 };
 
+// OutboundLink定义的都是OUT事件类型的操作。
 template <class Out>
 class OutboundLink {
  public:
@@ -71,15 +78,17 @@ class OutboundLink {
   virtual folly::Future<folly::Unit> close() = 0;
 };
 
+// ContextImplBase主要实现了PipelineContext接口方法
 template <class H, class Context>
 class ContextImplBase : public PipelineContext {
  public:
   ~ContextImplBase() override = default;
 
+    // 获取Context绑定的Handler
   H* getHandler() {
     return handler_.get();
   }
-
+    // Context初始化，参数为Context所属的Pipeline weak_ptr，Context要绑定的Handler  shared_ptr
   void initialize(
       std::weak_ptr<PipelineBase> pipeline,
       std::shared_ptr<H> handler) {
@@ -91,12 +100,13 @@ class ContextImplBase : public PipelineContext {
   // PipelineContext overrides
   void attachPipeline() override {
     if (!attached_) {
+        //handler中添加了绑定到 context, Context和Handler都互相持有对方的引用
       this->attachContext(handler_.get(), impl_);
       handler_->attachPipeline(impl_);
       attached_ = true;
     }
   }
-
+    // 从pipeline中分离
   void detachPipeline() override {
     handler_->detachPipeline(impl_);
     attached_ = false;
@@ -108,6 +118,7 @@ class ContextImplBase : public PipelineContext {
       nextIn_ = nullptr;
       return;
     }
+      // 转成InboundLink，因为Context是InboundLink子类
     auto nextIn = dynamic_cast<InboundLink<typename H::rout>*>(ctx);
     if (nextIn) {
       nextIn_ = nextIn;
@@ -130,23 +141,29 @@ class ContextImplBase : public PipelineContext {
           "outbound type mismatch after {}", folly::demangle(typeid(H))));
     }
   }
-
+    // 获取Context的方向
   HandlerDir getDirection() override {
     return H::dir;
   }
 
  protected:
-  Context* impl_;
-  std::weak_ptr<PipelineBase> pipelineWeak_;
-  PipelineBase* pipelineRaw_;
-  std::shared_ptr<H> handler_;
-  InboundLink<typename H::rout>* nextIn_{nullptr};
-  OutboundLink<typename H::wout>* nextOut_{nullptr};
+  Context* impl_;     // 具体的Context实现
+  std::weak_ptr<PipelineBase> pipelineWeak_;  // Context中持有的Pipeline是一个weak类型的指针
+  PipelineBase* pipelineRaw_;           // 该Context绑定的 pipeline的指针
+  std::shared_ptr<H> handler_;         // 该Context包含的Handler
+  InboundLink<typename H::rout>* nextIn_{nullptr};  //指向下一个item， 构成一个链表
+  OutboundLink<typename H::wout>* nextOut_{nullptr}; // nextIn_和nextOut_就是链表的指针，用来串联起整个Context
 
  private:
   bool attached_{false};
 };
 
+    //HandlerContext中主要定义了以fire开头的事件传递方法；
+    //InboundLink和OutboundLink分别定义了Handler中Inbound和Outbound类型的方法接口
+    //ContextImplBase主要提供了Pipeline中Context在组装链表时的接口，比如：setNextIn、setNextOut，
+    // 以及用于将Context绑定到handler上的attachPipeline方法。
+    // ContextImpl就是最终的Context实现，也就是要被添加到Pipeline中（比如使用addBack）的容器（ctxs_，inCtxs_，outCtxs_）的最终Context，
+    // 在最后的finalize方法中还会进一步将容器中的Context组装成front_和back_单向链表
 template <class H>
 class ContextImpl
   : public HandlerContext<typename H::rout,
@@ -178,9 +195,12 @@ class ContextImpl
 
   // HandlerContext overrides
   void fireRead(Rout msg) override {
-    auto guard = this->pipelineWeak_.lock();
+    auto guard = this->pipelineWeak_.lock();  //  尝试lock，保证在事件传播阶段这个Pipeline不会销毁
     if (this->nextIn_) {
-      this->nextIn_->read(std::forward<Rout>(msg));
+    //  将事件继续向下传播（传给下一个Inbound类型的Context）
+    //  注意：这里调用的是下一个Contex的read而不是fireRead
+    //  即调用下一个Context里面的Handler方法
+      this->nextIn_->read(std::forward<Rout>(msg));  //调用下一个IN类型的Context的read方法
     } else {
       LOG(WARNING) << "read reached end of pipeline";
     }
@@ -218,12 +238,14 @@ class ContextImpl
     }
   }
 
+  //Outbound类型的事件传播
   folly::Future<folly::Unit> fireWrite(Wout msg) override {
     auto guard = this->pipelineWeak_.lock();
-    if (this->nextOut_) {
+    if (this->nextOut_) {   // 如果还没有到最后
       return this->nextOut_->write(std::forward<Wout>(msg));
     } else {
       LOG(WARNING) << "write reached end of pipeline";
+      // 如果到了最后，返回一个future
       return folly::makeFuture();
     }
   }
@@ -319,6 +341,7 @@ class ContextImpl
   }
 };
 
+// // inbound 类型的InboundHandlerContext
 template <class H>
 class InboundContextImpl
   : public InboundHandlerContext<typename H::rout>,
@@ -489,6 +512,7 @@ class OutboundContextImpl
   }
 
   // OutboundLink overrides
+  // Pipeline的write方法只是简单的调用back_的wirte方法，也就是OUT类型的事件会从Pipeline的最后一个Context依次向前传递(只传递给OUT类型的handler)。
   folly::Future<folly::Unit> write(Win msg) override {
     auto guard = this->pipelineWeak_.lock();
     return this->handler_->write(this, std::forward<Win>(msg));
@@ -506,6 +530,10 @@ class OutboundContextImpl
   }
 };
 
+//它会根据Handler的类型（具体来说是方向）决定Context的类型，
+// 如果Handler是双向的，那么Context类型为ContextImpl<Handler>，
+// 如果Handler的方向为IN，那么Context类型为InboundContextImpl<Handler>，
+// 如果Handler的方向为OUT，那么Context类型为OutboundContextImpl<Handler>。
 template <class Handler>
 struct ContextType {
   typedef typename std::conditional<

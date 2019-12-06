@@ -26,6 +26,11 @@
 namespace wangle {
 
 // This handler may only be used in a single Pipeline
+//    上层业务调用了pipeline->wirte方法之后，便会在Pipeline中引发一个Outbound类型的事件传播，
+//    这个事件会从back_链表表头开始，逐步向前传播，但是这只是在传播事件，并没有执行真正的网络IO
+//  将AsyncSocketHandler添加到Pipeline的最前面（作为第一个Handler）,
+//  当wirte事件传播到AsyncSocketHandler时，由AsyncSocketHandler完成真正的网络IO，
+// AsyncSocketHandler后面添加的Handler的Rin类型和AsyncSocketHandler的Rout类型匹配，否则将导致类型转换错误
 class AsyncSocketHandler
   : public wangle::BytesToBytesHandler,
     public folly::AsyncTransportWrapper::ReadCallback {
@@ -99,11 +104,12 @@ class AsyncSocketHandler
   folly::Future<folly::Unit> write(
       Context* ctx,
       std::unique_ptr<folly::IOBuf> buf) override {
+      // 可写之前刷新超时时间
     refreshTimeout();
     if (UNLIKELY(!buf)) {
       return folly::makeFuture();
     }
-
+      // 写之前判断当前的连接状态
     if (!socket_->good()) {
       VLOG(5) << "socket is closed in write()";
       return folly::makeFuture<folly::Unit>(folly::AsyncSocketException(
@@ -113,6 +119,7 @@ class AsyncSocketHandler
 
     auto cb = new WriteCallback();
     auto future = cb->promise_.getFuture();
+      // 调用AsyncSocket执行真正的网络IO操作,
     socket_->writeChain(cb, std::move(buf), ctx->getWriteFlags());
     return future;
   }
@@ -148,9 +155,13 @@ class AsyncSocketHandler
     *lenReturn = ret.second;
   }
 
+//  AsyncSocketHandler本身还是folly::AsyncTransportWrapper::ReadCallback的子类，
+//  因此它可以作为AsyncSocket的回调被触发，当AsyncSocket读到网络数据后，
+//  会调用readDataAvailable方法（folly::AsyncTransportWrapper::ReadCallback中的接口
   void readDataAvailable(size_t len) noexcept override {
     refreshTimeout();
     bufQueue_.postallocate(len);
+    // 在pipeline中引发这个事件传播
     getContext()->fireRead(bufQueue_);
   }
 

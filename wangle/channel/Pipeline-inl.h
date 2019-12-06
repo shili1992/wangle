@@ -35,7 +35,7 @@ Pipeline<R, W>::~Pipeline() {
   }
 }
 
-// 首先，会根据要添加的handler类型定义一个Context（Context可以看成是Handler的外套,后面还会单独介绍）类型，
+// 首先，会根据要添加的handler类型定义一个Context（Context可以看成是Handler的外套)类型，
 // 然后根据这个Context类型创建一个Context：参数为Pipeline指针和handler，最终addHelper会将Context添加到容器管理起来
 template <class H>
 PipelineBase& PipelineBase::addBack(std::shared_ptr<H> handler) {
@@ -267,10 +267,14 @@ Pipeline<R, W>::close() {
 }
 
 // TODO Have read/write/etc check that pipeline has been finalized
+//    ContextImpl就是最终的Context实现，也就是要被添加到Pipeline中（比如使用addBack）的容器
+//    （ctxs_，inCtxs_，outCtxs_）的最终Context，
+//    在最后的finalize方法中还会进一步将容器中的Context组装成front_和back_单向链表。
 template <class R, class W>
 void Pipeline<R, W>::finalize() {
   front_ = nullptr;
   if (!inCtxs_.empty()) {
+      //遍历inCtxs_容器，对容器中的每一个Context调用其setNextIn方法将Context组成一个单向链表front_
     front_ = dynamic_cast<InboundLink<R>*>(inCtxs_.front());
     for (size_t i = 0; i < inCtxs_.size() - 1; i++) {
       inCtxs_[i]->setNextIn(inCtxs_[i+1]);
@@ -278,6 +282,7 @@ void Pipeline<R, W>::finalize() {
     inCtxs_.back()->setNextIn(nullptr);
   }
 
+  // 返回结果是从后指向前面 back指向最后一个元素
   back_ = nullptr;
   if (!outCtxs_.empty()) {
     back_ = dynamic_cast<OutboundLink<W>*>(outCtxs_.back());
@@ -298,6 +303,8 @@ void Pipeline<R, W>::finalize() {
         "std::invalid_argument");
   }
 
+    //遍历Context的总容器ctxs_，为每一个Context调用attachPipeline方法，该方法主要工作就是把Context绑定到对应的Handler上
+    //   handler中添加了绑定到 context, Context和Handler都互相持有对方的引用
   for (auto it = ctxs_.rbegin(); it != ctxs_.rend(); it++) {
     (*it)->attachPipeline();
   }

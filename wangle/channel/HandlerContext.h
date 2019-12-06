@@ -24,12 +24,14 @@ namespace wangle {
 
 class PipelineBase;
 
+// HandlerContext定义(集inbound和outbound类型于一身)
+// 以fire开始的方法都是Context中的事件方法
 template <class In, class Out>
 class HandlerContext {
  public:
   virtual ~HandlerContext() = default;
 
-  virtual void fireRead(In msg) = 0;  //从上游
+  virtual void fireRead(In msg) = 0;  //从上游来的数据
   virtual void fireReadEOF() = 0;
   virtual void fireReadException(folly::exception_wrapper e) = 0;
   virtual void fireTransportActive() = 0;
