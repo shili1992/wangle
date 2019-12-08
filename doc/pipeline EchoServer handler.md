@@ -1,8 +1,5 @@
-![Aaron Swartz]（https://raw.githubusercontent.com/shili1992/picture/master/frame%20stack.png]
-
-![](C:\Users\shili\Desktop\Image [2].png)
-
-
+![Aaron Swartz](https://raw.githubusercontent.com/shili1992/picture/master/frame%20stack.png)
+![Aaron Swartz](https://raw.githubusercontent.com/shili1992/picture/master/relation.png)
 
 一个节点运行过程为：
 
