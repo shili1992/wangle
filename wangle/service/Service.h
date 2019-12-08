@@ -62,6 +62,8 @@ class Service {
  *
  * [ThriftIn -> (String  ->  Int) -> ThriftOut]
  */
+//    ServiceFilter有四个模板参数，其中ReqA和RespA表示该Filter处理的请求和响应数据类型，
+//    而ReqB和RespB表示该Filter所装饰的Service的请求和响应数据类型，也就是Filter是可以对数据类型进行转换的。
 template <typename ReqA, typename RespA,
           typename ReqB = ReqA, typename RespB = RespA>
 class ServiceFilter : public Service<ReqA, RespA> {

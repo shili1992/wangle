@@ -33,6 +33,7 @@ class ExecutorFilter : public ServiceFilter<Req, Resp> {
       , exe_(exe) {}
 
  folly::Future<Resp> operator()(Req req) override {
+     // 通过via切换线程executor中，比如可以做服务之间的线程池隔离
    return via(exe_.get()).thenValue(
      [req = std::move(req), this](auto&&) mutable {
        return (*this->service_)(std::move(req));
@@ -40,6 +41,7 @@ class ExecutorFilter : public ServiceFilter<Req, Resp> {
   }
 
  private:
+    // 执行线程executor, 可能有多个线程
   std::shared_ptr<folly::Executor> exe_;
 };
 

@@ -21,6 +21,9 @@
 
 namespace wangle {
 
+// 能是保证无论从哪一个线程执行write，都可以保证到AsyncSocketHandler时，都处于AsyncSocket所绑定的IO线程
+// 一旦使用了EventBaseHandler，那么在EventBaseHandler之后的Handler都可以在任意的线程发起write操作，
+// EventBaseHandler会保证最终在IO线程中完成真正的网络IO
 class EventBaseHandler : public OutboundBytesToBytesHandler {
  public:
   folly::Future<folly::Unit> write(
@@ -29,6 +32,10 @@ class EventBaseHandler : public OutboundBytesToBytesHandler {
     folly::Future<folly::Unit> retval;
     DCHECK(ctx->getTransport());
     DCHECK(ctx->getTransport()->getEventBase());
+    // 先从AsyncSocket中获取它锁绑定的IO线程（EventBase），然后使用
+    // runImmediatelyOrRunInEventBaseThreadAndWait直接把事件委派到该线程上执行。
+    // 确保无论在哪个Eventbase写，都会重定位到socket所在的eventbase（IO线程）
+    // 从其他线程切换到 IO线程进行网络发送
     ctx->getTransport()->getEventBase()->runImmediatelyOrRunInEventBaseThreadAndWait([&](){
         retval = ctx->fireWrite(std::move(buf));
     });

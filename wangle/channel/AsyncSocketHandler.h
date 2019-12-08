@@ -93,6 +93,7 @@ class AsyncSocketHandler
   void transportInactive(Context* ctx) override {
     // detachReadCallback invokes fireTransportInactive() if the transport
     // is currently active.
+      //当连接可用时，添加Read回调，也就是AsyncSocketHandler本身（作为Pipeline的第一个Handler）
     detachReadCallback();
     ctx->getPipeline()->setTransport(nullptr);
   }
