@@ -88,6 +88,7 @@ class ServerBootstrap {
    *
    * @param factory pipeline factory to use for each new connection
    */
+  //设置生成新的pipeline的工厂类
   ServerBootstrap* childPipeline(
       std::shared_ptr<PipelineFactory<Pipeline>> factory) {
     childPipelineFactory_ = factory;
@@ -100,6 +101,7 @@ class ServerBootstrap {
    *
    * @param io_group - io executor to use for IO threads.
    */
+  // 设置io executor
   ServerBootstrap* group(
       std::shared_ptr<folly::IOThreadPoolExecutor> io_group) {
     return group(nullptr, io_group);
@@ -114,10 +116,12 @@ class ServerBootstrap {
    * @param group - acceptor executor to use for acceptor threads.
    * @param io_group - io executor to use for IO threads.
    */
+  // 设置acceptor线程池和io线程池
   ServerBootstrap* group(
       std::shared_ptr<folly::IOThreadPoolExecutor> accept_group,
       std::shared_ptr<folly::IOThreadPoolExecutor> io_group) {
     if (!accept_group) {
+        // 如果没有设置accept线程 就创建一个只有一个线程的线程池负责accept
       accept_group = std::make_shared<folly::IOThreadPoolExecutor>(
         1, std::make_shared<folly::NamedThreadFactory>("Acceptor Thread"));
     }
@@ -135,10 +139,12 @@ class ServerBootstrap {
     // CHECK(acceptorFactory_ || childPipelineFactory_);
     CHECK(!(acceptorFactory_ && childPipelineFactory_));
 
+      // 如果自己提供了定制的ServerWorkerPool
     if (acceptorFactory_) {
       workerFactory_ = std::make_shared<ServerWorkerPool>(
         acceptorFactory_, io_group.get(), sockets_, socketFactory_);
     } else {
+        // 否则就是用默认的
       workerFactory_ = std::make_shared<ServerWorkerPool>(
           std::make_shared<ServerAcceptorFactory<Pipeline>>(
               acceptPipelineFactory_, childPipelineFactory_, accConfig_),
@@ -147,6 +153,8 @@ class ServerBootstrap {
           socketFactory_);
     }
 
+      // 为IO线程池添加观察者！这一步会出发调用每一个线程的threadPreviouslyStarted方法
+      // workerFactory_是一个ThreadPoolExecutor::Observer
     io_group->addObserver(workerFactory_);
 
     acceptor_group_ = accept_group;
@@ -204,15 +212,15 @@ class ServerBootstrap {
   void bind(int port) {
     CHECK(port >= 0);
     folly::SocketAddress address;
-    address.setFromLocalPort(port);
+    address.setFromLocalPort(port); // 设置本地地址
     bindImpl(address);
   }
 
   void bindImpl(folly::SocketAddress& address) {
-    if (!workerFactory_) {
+    if (!workerFactory_) {  // 之前没有手动设置group
       group(nullptr);
     }
-
+      // 如果accept线程数大于1，那么就在所有的accept线程中重用端口进行监听
     bool reusePort = reusePort_ || (acceptor_group_->numThreads() > 1);
 
     std::mutex sock_lock;
@@ -220,10 +228,11 @@ class ServerBootstrap {
 
 
     std::exception_ptr exn;
-
+      // 定义一个lambda表达式，执行ServerSocket创建和accept操作，该函数一定会在accept线程中执行
     auto startupFunc = [&](std::shared_ptr<folly::Baton<>> barrier) {
 
       try {
+          // 创建服务端监听socket, 此函数不会阻塞
         auto socket = socketFactory_->newSocket(
             address, socketConfig.acceptBacklog, reusePort, socketConfig);
         sock_lock.lock();
@@ -231,7 +240,7 @@ class ServerBootstrap {
         sock_lock.unlock();
         socket->getAddress(&address);
 
-        barrier->post();
+        barrier->post();   // 唤醒
       } catch (...) {
         exn = std::current_exception();
         barrier->post();
@@ -242,9 +251,11 @@ class ServerBootstrap {
     };
 
     auto wait0 = std::make_shared<folly::Baton<>>();
+      // 在acceptor_group_线程池中添加并执行startupFunc任务（异步）
     acceptor_group_->add(std::bind(startupFunc, wait0));
-    wait0->wait();
+    wait0->wait(); ;//等待
 
+      // 在剩下的acceptor线程中启动监听
     for (size_t i = 1; i < acceptor_group_->numThreads(); i++) {
       auto barrier = std::make_shared<folly::Baton<>>();
       acceptor_group_->add(std::bind(startupFunc, barrier));
@@ -254,16 +265,17 @@ class ServerBootstrap {
     if (exn) {
       std::rethrow_exception(exn);
     }
-
+      // 遍历new_sockets(所有新创建的listening中的socket)
     for (auto& socket : new_sockets) {
       // Startup all the threads
       workerFactory_->forEachWorker([this, socket](Acceptor* worker){
         socket->getEventBase()->runImmediatelyOrRunInEventBaseThreadAndWait(
           [this, worker, socket](){
+              // 异步的添加accept回调worker
             socketFactory_->addAcceptCB(socket, worker, worker->getEventBase());
         });
       });
-
+        // 缓存所有处于listening状态的socket
       sockets_->push_back(socket);
     }
   }

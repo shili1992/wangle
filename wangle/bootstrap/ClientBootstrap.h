@@ -60,11 +60,11 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
               sslSocket->getSSLSession());
           }
         }
-        bootstrap_->makePipeline(std::move(socket_));
+        bootstrap_->makePipeline(std::move(socket_));  // 会使用pipelineFactory_的newPipeline进行创建
         if (bootstrap_->getPipeline()) {
-          bootstrap_->getPipeline()->transportActive();
+          bootstrap_->getPipeline()->transportActive();  // 会在这个Pipeline中传递transportActive事件
         }
-        promise_.setValue(bootstrap_->getPipeline());
+        promise_.setValue(bootstrap_->getPipeline());  // 将这个pipeline返回
       }
       delete this;
     }
@@ -77,7 +77,7 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
    private:
     folly::Promise<Pipeline*> promise_;
     ClientBootstrap* bootstrap_;
-    std::shared_ptr<folly::AsyncSocket> socket_;
+    std::shared_ptr<folly::AsyncSocket> socket_;  //用于初始化AsyncSocketHandler用于网络收发
     folly::DestructorCheck::Safety safety_;
     SSLSessionEstablishedCallbackUniquePtr sslSessionEstablishedCallback_;
   };
@@ -86,6 +86,7 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
   ClientBootstrap() {
   }
 
+  // 设置IO线程池
   ClientBootstrap* group(
       std::shared_ptr<folly::IOThreadPoolExecutor> group) {
     group_ = group;
@@ -101,6 +102,7 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
       const folly::SocketAddress& address,
       std::chrono::milliseconds timeout =
           std::chrono::milliseconds(0)) override {
+      // 如果指定了io线程池，就从IO线程池中取eventbase，否则就从folly::EventBaseManager取
     auto base = (group_)
       ? group_->getEventBase()
       : folly::EventBaseManager::get()->getEventBase();
@@ -120,15 +122,17 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
         }
         socket = sslSocket;
       } else {
+          // 创建一个异步socket
         socket = folly::AsyncSocket::newSocket(base);
       }
       folly::Promise<Pipeline*> promise;
       retval = promise.getFuture();
+        // 发起异步连接，并将promise传给异步回调
       socket->connect(
           new ConnectCallback(
               std::move(promise),
               this,
-              socket,
+              socket,  // connect失败成功后的回调
               std::move(this->sslSessionEstablishedCallback_)),
           address,
           timeout.count());
@@ -140,7 +144,7 @@ class ClientBootstrap : public BaseClientBootstrap<Pipeline>,
 
  protected:
   int port_;
-  std::shared_ptr<folly::IOThreadPoolExecutor> group_;
+  std::shared_ptr<folly::IOThreadPoolExecutor> group_; //client 使用的 io线程池
 };
 
 class ClientBootstrapFactory

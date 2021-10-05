@@ -57,7 +57,7 @@ class ClientDispatcherBase : public HandlerAdapter<Resp, Req>
   }
 
  protected:
-  Pipeline* pipeline_{nullptr};
+  Pipeline* pipeline_{nullptr}; //注册进来的pipeline
 };
 
 /**
@@ -86,7 +86,7 @@ class SerialClientDispatcher
 
     p_ = folly::Promise<Resp>();
     auto f = p_->getFuture();  //返回 promise对应的future 给使用者
-    this->pipeline_->write(std::move(arg));
+    this->pipeline_->write(std::move(arg));  //开始从pipeline 的back_开始调用handler函数
     return f;
   }
 

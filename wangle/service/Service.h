@@ -64,6 +64,7 @@ class Service {
  */
 //    ServiceFilter有四个模板参数，其中ReqA和RespA表示该Filter处理的请求和响应数据类型，
 //    而ReqB和RespB表示该Filter所装饰的Service的请求和响应数据类型，也就是Filter是可以对数据类型进行转换的。
+// ServiceFilter本质就是一个装饰器模式的使用
 template <typename ReqA, typename RespA,
           typename ReqB = ReqA, typename RespB = RespA>
 class ServiceFilter : public Service<ReqA, RespA> {
@@ -81,7 +82,7 @@ class ServiceFilter : public Service<ReqA, RespA> {
   }
 
  protected:
-  std::shared_ptr<Service<ReqB, RespB>> service_;
+  std::shared_ptr<Service<ReqB, RespB>> service_; //将上一个service，将多个service串起来调用
 };
 
 /**

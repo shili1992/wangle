@@ -25,7 +25,7 @@ namespace wangle {
  * Dispatch requests from pipeline one at a time synchronously.
  * Concurrent requests are queued in the pipeline.
  */
- // 和 SerialClientDispatcher 对应， 只有一个
+ // 和 SerialClientDispatcher 对应， 只有一个。 本质上SerialServerDispatcher就是一个handler
 template <typename Req, typename Resp = Req>
 class SerialServerDispatcher : public HandlerAdapter<Req, Resp> {
  public:
@@ -33,10 +33,10 @@ class SerialServerDispatcher : public HandlerAdapter<Req, Resp> {
   typedef typename HandlerAdapter<Req, Resp>::Context Context;
 
   explicit SerialServerDispatcher(Service<Req, Resp>* service)
-      : service_(service) {}
+      : service_(service) {}  //将需要的service注册进来
 
   void read(Context* ctx, Req in) override {
-    auto resp = (*service_)(std::move(in)).get();  //同步等待
+    auto resp = (*service_)(std::move(in)).get();  //调用真正的service服务， 并同步等待
     ctx->fireWrite(std::move(resp)); // 写回响应
   }
 

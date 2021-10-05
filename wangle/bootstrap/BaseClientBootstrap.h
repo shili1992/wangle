@@ -48,6 +48,7 @@ class BaseClientBootstrap {
 
   virtual ~BaseClientBootstrap() = default;
 
+  //设置 产生 pipeline的工厂类
   BaseClientBootstrap<P>* pipelineFactory(
       std::shared_ptr<PipelineFactory<P>> factory) noexcept {
     pipelineFactory_ = factory;

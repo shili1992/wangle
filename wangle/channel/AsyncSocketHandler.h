@@ -36,7 +36,7 @@ class AsyncSocketHandler
     public folly::AsyncTransportWrapper::ReadCallback {
  public:
   explicit AsyncSocketHandler(
-      std::shared_ptr<folly::AsyncTransportWrapper> socket)
+      std::shared_ptr<folly::AsyncTransportWrapper> socket) //设置网络socket进行发包 和收包
     : socket_(std::move(socket)) {}
 
   AsyncSocketHandler(AsyncSocketHandler&&) = default;
@@ -219,7 +219,7 @@ class AsyncSocketHandler
   };
 
   folly::IOBufQueue bufQueue_{folly::IOBufQueue::cacheChainLength()};
-  std::shared_ptr<folly::AsyncTransportWrapper> socket_{nullptr};
+  std::shared_ptr<folly::AsyncTransportWrapper> socket_{nullptr};  //进行网络收发
   bool firedInactive_{false};
   bool pipelineDeleted_{false};
 };
